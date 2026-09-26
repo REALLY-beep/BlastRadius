@@ -1,0 +1,13 @@
+diff --git a/shop.py b/shop.py
+--- a/shop.py
++++ b/shop.py
+@@ -3,9 +3,9 @@
+ """
+ 
+ def calculate_total(prices: list[float]) -> float:
+     """Sum all prices."""
+-    return sum(prices)
++    return sum(prices) * 1.0
+ 
+ 
+ def apply_discount(total: float, percent: float) -> float:

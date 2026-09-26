@@ -1,0 +1,73 @@
+BlastRadius — Session Log
+=========================
+Date: 2025-07-23
+
+TASK
+----
+Read the project documentation, check for bugs, and launch the app without user intervention.
+
+WHAT WAS DONE
+-------------
+
+1. READ DOCUMENTATION
+   - README.md: overview, run instructions, demo, project structure, test suite info.
+   - README_AI.md: detailed setup guide for AI (Local GGUF) mode via llama.cpp llama-server.
+
+2. READ ALL SOURCE FILES
+   - app/main.py          — FastAPI routes: /, /analyze, /api/llm/status, /health
+   - app/analyzer.py      — AST-based call-graph analysis, risk scoring, diff parsing
+   - app/models.py        — Pydantic models: AnalysisResult, CallSite, ChangedFunction, etc.
+   - app/test_generator.py — Deterministic pytest template generator
+   - app/pytest_runner.py — Runs generated tests in a temp dir via subprocess
+   - app/llm/config.py    — LLM config (env vars, defaults)
+   - app/llm/client.py    — HTTP client for llama-server (OpenAI-compatible)
+   - app/llm/engine.py    — AI analysis engine (analysis + test generation + repair loop)
+   - app/llm/context.py   — Builds focused context from repo for the GGUF model
+   - app/llm/prompts.py   — System/user prompts for analysis, test gen, repair
+   - app/llm/parse.py     — Parses JSON and Python from model output
+   - templates/index.html — Jinja2 UI template
+   - examples/change.diff, examples/sample_project/shop.py, test_shop.py
+   - tests/ (7 test files, 48 tests total)
+
+3. BUG FOUND
+   File: requirements.txt, line 5
+   Before: pydantic==2.9.2
+   Problem: pydantic 2.9.2 depends on pydantic-core 2.23.4, which uses pyo3 v0.22.2.
+            pyo3 v0.22.2 only supports Python up to 3.13.
+            The system has Python 3.14.6 — the Rust build fails with:
+            "the configured Python interpreter version (3.14) is newer than
+             PyO3's maximum supported version (3.13)"
+   Fix: changed pin to pydantic>=2.10, which ships a pre-built wheel for Python 3.14.
+
+4. FIX APPLIED
+   requirements.txt line 5 changed:
+     pydantic==2.9.2  →  pydantic>=2.10
+
+5. DEPENDENCIES INSTALLED
+   - Created .venv with Python 3.14.6
+   - Installed all packages successfully (pydantic 2.13.5 was resolved)
+
+6. TEST SUITE
+   Result: 48 passed in 8.56s
+   Files:
+     - tests/test_ai_mode.py         (3 tests)
+     - tests/test_analyzer.py        (8 tests)
+     - tests/test_llm_client.py      (10 tests)
+     - tests/test_llm_engine.py      (7 tests)
+     - tests/test_llm_parse.py       (6 tests)
+     - tests/test_main.py            (9 tests)
+     - tests/test_pytest_runner.py   (3 tests)
+     - examples/sample_project/test_shop.py (2 tests)
+
+7. SERVER LAUNCHED
+   Command: uvicorn app.main:app --host 127.0.0.1 --port 8000
+   Result:  INFO: Application startup complete.
+            INFO: Uvicorn running on http://127.0.0.1:8000
+
+   AST mode works immediately — no model or internet required.
+   AI mode requires a running llama.cpp llama-server (see README_AI.md).
+
+SUMMARY
+-------
+One bug fixed (pydantic version pin incompatible with Python 3.14).
+All 48 tests pass. App running at http://127.0.0.1:8000.
