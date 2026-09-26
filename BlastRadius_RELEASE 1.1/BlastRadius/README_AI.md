@@ -1,34 +1,34 @@
-# BlastRadius — установка локального AI (GGUF)
+# BlastRadius — Local AI Setup (GGUF)
 
-Это отдельная инструкция только для режима **AI — Local GGUF**.  
-Режим **AST** в этом файле не нужен: он работает без модели, без интернета и без llama-server.
+This is a dedicated guide for the **AI — Local GGUF** mode only.  
+The **AST** mode is not covered here: it works without a model, without internet access, and without llama-server.
 
-BlastRadius **не загружает** `.gguf` сам. Он ходит по HTTP в локальный `llama-server` (llama.cpp) и больше никуда исходники не отправляет.
+BlastRadius **does not load** `.gguf` files itself. It communicates over HTTP with a local `llama-server` (llama.cpp) and sends source code nowhere else.
 
 ```text
-GGUF-файл на диске
+GGUF file on disk
         ↓
-llama.cpp llama-server   ←  вот сюда кладётся модель
+llama.cpp llama-server   ←  this is where the model goes
         ↓  HTTP  127.0.0.1:8080/v1/chat/completions
-BlastRadius (FastAPI)    ←  сюда модель НЕ класть
+BlastRadius (FastAPI)    ←  do NOT put the model here
         ↓
-UI: Connected / анализ / pytest
+UI: Connected / analysis / pytest
 ```
 
-Если llama-server не запущен, AI-режим покажет ошибку и **не** переключится на AST.
+If llama-server is not running, AI mode will show an error and will **not** fall back to AST.
 
 ---
 
-## 1. Что должно получиться
+## 1. Expected end state
 
-Два процесса одновременно:
+Two processes running simultaneously:
 
-| Процесс | Порт по умолчанию | Зачем |
+| Process | Default port | Purpose |
 | --- | --- | --- |
-| BlastRadius (`start.bat` / uvicorn) | **8000** | Сайт анализа |
-| `llama-server` с GGUF | **8080** | Локальная модель |
+| BlastRadius (`start.bat` / uvicorn) | **8000** | Analysis web app |
+| `llama-server` with GGUF | **8080** | Local model |
 
-В UI:
+In the UI:
 
 1. Analysis Engine → **AI — Local GGUF**
 2. Server → `http://127.0.0.1:8080`
@@ -37,31 +37,31 @@ UI: Connected / анализ / pytest
 
 ---
 
-## 2. Что скачать заранее
+## 2. What to download beforehand
 
-Нужны три вещи:
+Three things are needed:
 
-1. **Python 3.10+** — уже нужен для BlastRadius.
-2. **llama.cpp llama-server** — сервер, который читает `.gguf`.
-3. **Файл модели `*.gguf`** — веса. Это не часть репозитория BlastRadius.
+1. **Python 3.10+** — already required for BlastRadius.
+2. **llama.cpp llama-server** — the server that reads `.gguf` files.
+3. **A model file `*.gguf`** — the weights. This is not part of the BlastRadius repository.
 
-Рекомендуемые модели для анализа кода (хватит 7B–14B, квант Q4_K_M или Q5_K_M):
+Recommended models for code analysis (7B–14B is sufficient, quantization Q4_K_M or Q5_K_M):
 
 - Qwen2.5-Coder 7B Instruct
-- Qwen2.5-Coder 14B Instruct (если есть 12+ ГБ VRAM / много RAM)
+- Qwen2.5-Coder 14B Instruct (if you have 12+ GB VRAM / plenty of RAM)
 - Llama 3.1 8B Instruct
 - Gemma 2 9B Instruct
 
-Имена на Hugging Face обычно выглядят так:
+Names on Hugging Face typically look like:
 
 ```text
 *-Instruct-Q4_K_M.gguf
 *-Instruct-Q5_K_M.gguf
 ```
 
-Не бери «сырой» base без Instruct, если можно Instruct. Для BlastRadius модель должна уметь отвечать JSON и писать pytest.
+Prefer an Instruct variant over a raw base model when available. BlastRadius requires the model to respond in JSON and write pytest code.
 
-Где лежит файл — неважно. Удобно так:
+The file can live anywhere. A convenient convention:
 
 ```text
 Windows:  C:\models\qwen2.5-coder-7b-instruct-q4_k_m.gguf
@@ -69,51 +69,51 @@ Linux:    ~/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf
 macOS:    ~/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf
 ```
 
-**Не клади `.gguf` в папку BlastRadius.** Приложению нужен только URL сервера.
+**Do not place the `.gguf` inside the BlastRadius folder.** The application only needs the server URL.
 
-Ориентир по памяти:
+Memory reference:
 
-| Квант 7B | RAM / VRAM примерно | Комментарий |
+| 7B quant | Approx. RAM / VRAM | Notes |
 | --- | --- | --- |
-| Q4_K_M | 6–8 ГБ | Нормальный старт |
-| Q5_K_M | 8–10 ГБ | Чуть точнее |
-| Q8_0 | 10–14 ГБ | Обычно незачем для демо |
+| Q4_K_M | 6–8 GB | Good starting point |
+| Q5_K_M | 8–10 GB | Slightly more accurate |
+| Q8_0 | 10–14 GB | Usually unnecessary for demos |
 
 ---
 
-## 3. Установка llama-server
+## 3. Installing llama-server
 
-Нужен именно **llama-server** из llama.cpp. Он отдаёт OpenAI-совместимый endpoint:
+You need the **llama-server** binary from llama.cpp specifically. It exposes an OpenAI-compatible endpoint:
 
 ```text
 http://127.0.0.1:8080/v1/chat/completions
 ```
 
-Репозиторий: [github.com/ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
+Repository: [github.com/ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
 
-### Windows (самый простой путь)
+### Windows (easiest path)
 
-1. Открой [Releases llama.cpp](https://github.com/ggml-org/llama.cpp/releases).
-2. Скачай архив под своё железо:
-   - есть NVIDIA GPU → сборка с CUDA (`cudart`, `cuBLAS` в имени релиза);
-   - только CPU → CPU / `noavx` / обычный `bin`.
-3. Распакуй, например в `C:\llama.cpp\`.
-4. Внутри должен быть `llama-server.exe` (в новых релизах) или `server.exe` (в старых).
+1. Open [llama.cpp Releases](https://github.com/ggml-org/llama.cpp/releases).
+2. Download the archive that matches your hardware:
+   - NVIDIA GPU → build with CUDA (`cudart`, `cuBLAS` in the release name);
+   - CPU only → CPU / `noavx` / standard `bin`.
+3. Extract it, e.g. to `C:\llama.cpp\`.
+4. Inside you should find `llama-server.exe` (newer releases) or `server.exe` (older releases).
 
-Проверка из `cmd`:
+Verify from `cmd`:
 
 ```bat
 cd C:\llama.cpp
 llama-server.exe -h
 ```
 
-Если команда `llama-server` уже в PATH, можно не писать полный путь.
+If `llama-server` is already on your PATH you can omit the full path.
 
 ### Linux
 
-Вариант A — готовый бинарник с GitHub Releases.
+Option A — pre-built binary from GitHub Releases.
 
-Вариант B — сборка:
+Option B — build from source:
 
 ```bash
 sudo apt update
@@ -124,13 +124,13 @@ cmake -B build -DGGML_CUDA=OFF
 cmake --build build --config Release -t llama-server
 ```
 
-Бинарник обычно здесь:
+The binary is typically at:
 
 ```text
 build/bin/llama-server
 ```
 
-Для NVIDIA замени флаг на `-DGGML_CUDA=ON` (нужны CUDA toolkit и драйвер).
+For NVIDIA, change the flag to `-DGGML_CUDA=ON` (requires CUDA toolkit and driver).
 
 ### macOS (Apple Silicon)
 
@@ -138,9 +138,9 @@ build/bin/llama-server
 brew install llama.cpp
 ```
 
-или сборка из исходников. На M1/M2/M3 Metal подхватывается сам.
+or build from source. On M1/M2/M3, Metal acceleration is picked up automatically.
 
-Проверка:
+Verify:
 
 ```bash
 llama-server -h
@@ -148,9 +148,9 @@ llama-server -h
 
 ---
 
-## 4. Запуск модели
+## 4. Starting the model
 
-Сначала BlastRadius **не** запускай на порту 8080. `start.bat` поднимает его на **8000**, это правильно: 8080 оставляем модели.
+Do **not** start BlastRadius on port 8080. `start.bat` binds it to **8000**, which is correct: port 8080 is reserved for the model.
 
 ### Windows
 
@@ -165,45 +165,45 @@ llama-server.exe -m C:\models\qwen2.5-coder-7b-instruct-q4_k_m.gguf --host 127.0
 llama-server -m ~/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf --host 127.0.0.1 --port 8080 -c 4096 --jinja
 ```
 
-Полезные флаги:
+Useful flags:
 
-| Флаг | Зачем |
+| Flag | Purpose |
 | --- | --- |
-| `-m файл.gguf` | путь к модели, обязателен |
-| `--host 127.0.0.1` | только локально, исходники никуда не уходят |
-| `--port 8080` | порт, который ждёт BlastRadius |
-| `-c 4096` | контекст. Для дифа + исходников лучше 4096–8192 |
-| `-ngl 99` | слить слои на GPU, если GPU есть |
-| `--jinja` | шаблоны чата Instruct-моделей |
+| `-m file.gguf` | path to the model file, required |
+| `--host 127.0.0.1` | local only — source code never leaves the machine |
+| `--port 8080` | the port BlastRadius expects |
+| `-c 4096` | context size. For diffs + source code, 4096–8192 is recommended |
+| `-ngl 99` | offload layers to GPU if one is available |
+| `--jinja` | enables chat templates for Instruct models |
 
-Окно с llama-server **не закрывай**. BlastRadius к нему подключается, пока процесс жив.
+Keep the llama-server window **open**. BlastRadius connects to it as long as the process is alive.
 
-Успешный старт в логе выглядит примерно так:
+A successful start looks like this in the log:
 
 ```text
 llama server listening at http://127.0.0.1:8080
 ```
 
-Проверка без UI:
+Verify without the UI:
 
 ```bash
 curl http://127.0.0.1:8080/v1/models
 curl http://127.0.0.1:8080/health
 ```
 
-Должен вернуться JSON со списком моделей / статусом ok, а не страница BlastRadius.
+These should return a JSON model list / status `ok`, not a BlastRadius HTML page.
 
 ---
 
-## 5. Связка с BlastRadius
+## 5. Connecting to BlastRadius
 
-Терминал 1 — приложение:
+Terminal 1 — the application:
 
 ```bat
 start.bat
 ```
 
-или вручную:
+or manually:
 
 ```bash
 python -m venv .venv
@@ -212,48 +212,48 @@ pip install -r requirements.txt
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Открой http://127.0.0.1:8000
+Open http://127.0.0.1:8000
 
-Терминал 2 — модель, команда из раздела 4.
+Terminal 2 — the model, using the command from section 4.
 
-В интерфейсе:
+In the UI:
 
-1. Выбери **AI — Local GGUF**. Появится блок сервера.
+1. Select **AI — Local GGUF**. The server block will appear.
 2. **SERVER:** `http://127.0.0.1:8080`  
-   Можно вставить и полный путь `http://127.0.0.1:8080/v1/chat/completions` — лишний суффикс обрежется.
+   You can also paste the full path `http://127.0.0.1:8080/v1/chat/completions` — the extra suffix will be stripped.
 3. **MODEL NAME:** `local-gguf`  
-   llama.cpp часто игнорирует имя. Если `/v1/models` вернул конкретный id, вставь его.
+   llama.cpp often ignores the name. If `/v1/models` returned a specific id, use that instead.
 4. **Check connection**.
-5. Нужен статус **Connected**.
+5. Wait for **Connected** status.
 6. Load demo → **Run AI analysis**.
 
-Код уходит только на этот URL. Cloud API нет.
+Code is sent only to this URL. No cloud API is used.
 
 ---
 
-## 6. Что означают статусы
+## 6. Status meanings
 
-| Статус в UI | Что случилось | Что делать |
+| UI status | What happened | What to do |
 | --- | --- | --- |
-| **Connected** | llama-server отвечает, модель загружена | Можно анализировать |
-| **Disconnected** | порт закрыт, не тот процесс, или URL указывает на сам BlastRadius | Запусти llama-server, проверь порт |
-| **Invalid response** | что-то слушает порт, но это не llama-server | Не тот URL / не тот сервер |
-| **Model unavailable** | сервер жив, GGUF ещё грузится или не загрузился | Подожди или проверь `-m` |
+| **Connected** | llama-server is responding and the model is loaded | Ready to analyze |
+| **Disconnected** | port is closed, wrong process, or the URL points to BlastRadius itself | Start llama-server, verify the port |
+| **Invalid response** | something is listening on the port but it is not llama-server | Wrong URL / wrong server |
+| **Model unavailable** | server is alive but the GGUF is still loading or failed to load | Wait, or check the `-m` flag |
 
-Типичная ошибка: и BlastRadius, и llama-server на 8080. Тогда Check connection напишет, что это BlastRadius, а не модель.
+Common mistake: both BlastRadius and llama-server bound to port 8080. In that case, Check connection will report that it sees BlastRadius, not the model.
 
-Решения:
+Solutions:
 
-- BlastRadius оставь на **8000** (`start.bat` так и делает);
-- либо llama-server на другом порту:
+- Keep BlastRadius on **8000** (`start.bat` already does this);
+- or run llama-server on a different port:
 
 ```bash
 llama-server -m ~/models/model.gguf --port 8081 --host 127.0.0.1
 ```
 
-и в UI укажи `http://127.0.0.1:8081`.
+and set `http://127.0.0.1:8081` in the UI.
 
-Переменные окружения, если не хочешь каждый раз править форму:
+Environment variables (to avoid editing the form every time):
 
 ```text
 BLAST_RADIUS_LLM_URL=http://127.0.0.1:8080
@@ -264,74 +264,74 @@ BLAST_RADIUS_LLM_RETRIES=2
 
 ---
 
-## 7. Если анализ запустился, но тесты красные
+## 7. Analysis ran but tests are red
 
-Это нормально и не «фейковый успех». Пайплайн такой:
+This is normal and not a "fake success". The pipeline is:
 
 ```text
-модель пишет pytest
-    → проверка синтаксиса
-    → файл во временную папку
-    → настоящий pytest
-    → PASS / FAIL в UI
+model writes pytest
+    → syntax check
+    → file written to a temp directory
+    → real pytest run
+    → PASS / FAIL shown in UI
 ```
 
-При FAIL модель получает вывод pytest и может исправить тест (1–2 попытки, не бесконечно).
+On FAIL the model receives the pytest output and may fix the test (1–2 attempts, not indefinitely).
 
-Частые причины FAIL:
+Common reasons for FAIL:
 
-- модель выдумала функцию, которой нет в проекте;
-- слишком слабый GGUF / маленький контекст (`-c` увеличь до 8192);
-- не Instruct-модель, в ответ лезет проза вместо кода.
+- the model invented a function that does not exist in the project;
+- GGUF is too weak or context is too small (increase `-c` to 8192);
+- non-Instruct model — prose comes back instead of code.
 
-Режим AST при этом не включается сам.
+AST mode does not activate automatically in this case.
 
 ---
 
-## 8. Частые поломки
+## 8. Common failures
 
-**Порт занят**
+**Port already in use**
 
 ```text
 error: failed to bind socket
 ```
 
-Другой процесс уже на 8080. Смени `--port` или убей старый llama-server.
+Another process is already on port 8080. Change `--port` or kill the existing llama-server.
 
-**Файл модели не найден**
+**Model file not found**
 
 ```text
 failed to load model
 ```
 
-Проверь путь к `.gguf`. Пробелы в пути — в кавычки:
+Check the path to the `.gguf` file. If the path contains spaces, wrap it in quotes:
 
 ```bat
 llama-server.exe -m "C:\My Models\model.gguf" --port 8080
 ```
 
-**Connected есть, анализ висит**
+**Connected but analysis hangs**
 
-Мало RAM, CPU-only 14B, или `-c` слишком большой. Возьми 7B Q4_K_M, увеличь `BLAST_RADIUS_LLM_TIMEOUT`.
+Not enough RAM, CPU-only 14B model, or `-c` is too large. Use 7B Q4_K_M and increase `BLAST_RADIUS_LLM_TIMEOUT`.
 
-**curl открывает HTML BlastRadius**
+**curl returns BlastRadius HTML**
 
-URL указывает на приложение, не на llama-server. Смотри порты: 8000 = UI, 8080 = модель.
+The URL is pointing at the application, not at llama-server. Check ports: 8000 = UI, 8080 = model.
 
-**Антивирус / SmartScreen на Windows**
+**Antivirus / SmartScreen on Windows**
 
-Иногда режет `llama-server.exe` из GitHub Releases. Разреши файл или собери из исходников.
+Sometimes blocks `llama-server.exe` downloaded from GitHub Releases. Allow the file or build from source.
 
 ---
 
-## 9. Мини-чеклист перед демо
+## 9. Pre-demo checklist
 
-- [ ] `.gguf` скачан на диск (не в репозиторий)
-- [ ] `llama-server -m ... --port 8080` запущен и не закрыт
-- [ ] `curl http://127.0.0.1:8080/v1/models` отвечает JSON
-- [ ] BlastRadius на **8000**
-- [ ] В UI выбран AI, статус **Connected**
+- [ ] `.gguf` downloaded to disk (not into the repository)
+- [ ] `llama-server -m ... --port 8080` is running and the window is open
+- [ ] `curl http://127.0.0.1:8080/v1/models` returns JSON
+- [ ] BlastRadius is on **8000**
+- [ ] AI is selected in the UI, status shows **Connected**
 - [ ] Load demo → Run AI analysis
-- [ ] В блоке теста видно `✓ Generated` и реальный `✓ Pytest passed` или `✕ Pytest failed`
+- [ ] In the test block you can see `✓ Generated` and either `✓ Pytest passed` or `✕ Pytest failed`
 
-AST всегда остаётся запасным движком: переключил радиокнопку — и модель больше не нужна.
+AST always remains as a fallback engine: switch the radio button and the model is no longer needed.
