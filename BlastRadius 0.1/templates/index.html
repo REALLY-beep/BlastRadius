@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BlastRadius — See what can break</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #1a1d24;
+      --border: #2a2e38;
+      --text: #e6e8ec;
+      --muted: #9ba3af;
+      --accent: #3b82f6;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #22c55e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 2rem;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+    .subtitle { color: var(--muted); margin-bottom: 2rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+    textarea, input[type="text"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem;
+      color: var(--text);
+      font-family: ui-monospace, monospace;
+      font-size: 0.9rem;
+    }
+    textarea { min-height: 120px; resize: vertical; }
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 1rem;
+    }
+    button:hover { filter: brightness(1.1); }
+    .risk-score {
+      font-size: 3rem;
+      font-weight: 700;
+    }
+    .risk-high { color: var(--danger); }
+    .risk-medium { color: var(--warning); }
+    .risk-low { color: var(--success); }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-high { background: rgba(239,68,68,0.15); color: var(--danger); }
+    .badge-medium { background: rgba(245,158,11,0.15); color: var(--warning); }
+    .badge-low { background: rgba(34,197,94,0.15); color: var(--success); }
+    pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      margin-top: 0.5rem;
+    }
+    .empty { color: var(--muted); font-style: italic; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>BlastRadius</h1>
+    <p class="subtitle">Before you merge — see what your change can break</p>
+
+    <div class="card">
+      <form method="post" action="/analyze">
+        <label for="diff_text">Paste a unified diff (or leave empty for demo mode)</label>
+        <textarea id="diff_text" name="diff_text" placeholder="diff --git a/app.py b/app.py&#10;...">{{ diff_text or "" }}</textarea>
+        <button type="submit">Analyze Blast Radius</button>
+      </form>
+    </div>
+
+    {% if result %}
+    <div class="card">
+      <h2>Risk Score</h2>
+      <div class="risk-score 
+        {% if result.risk_score >= 60 %}risk-high
+        {% elif result.risk_score >= 30 %}risk-medium
+        {% else %}risk-low{% endif %}">
+        {{ result.risk_score }}
+      </div>
+      <p>{{ result.summary }}</p>
+    </div>
+
+    <div class="card">
+      <h2>Changed Functions</h2>
+      {% if result.changed_functions %}
+        <ul>
+          {% for f in result.changed_functions %}
+            <li><code>{{ f.name }}</code> in {{ f.file }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="empty">No changed functions detected</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Call Sites (Blast Radius)</h2>
+      {% if result.call_sites %}
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Line</th>
+              <th>Function</th>
+              <th>Risk</th>
+              <th>Tested?</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for site in result.call_sites %}
+            <tr>
+              <td>{{ site.file }}</td>
+              <td>{{ site.lineno }}</td>
+              <td><code>{{ site.function_name }}</code></td>
+              <td><span class="badge badge-{{ site.risk }}">{{ site.risk }}</span></td>
+              <td>{{ "Yes" if site.is_tested else "No" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="empty">No call sites found</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Generated Tests for High-Risk Untested Places</h2>
+      {% if result.generated_tests %}
+        {% for test in result.generated_tests %}
+          <h3>{{ test.filename }}</h3>
+          <p>Target: {{ test.target_call_site }}</p>
+          <pre>{{ test.content }}</pre>
+        {% endfor %}
+      {% else %}
+        <p class="empty">No high-risk untested call sites — looking good!</p>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>
